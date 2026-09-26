@@ -4,61 +4,220 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Mannheim Bulky ITMS Test</title>
+
 <style>
-body{font-family:Arial,sans-serif;background:#f3f5f7;margin:0;padding:40px;color:#17202a}
-.card{max-width:800px;margin:auto;background:white;padding:28px;border-radius:16px}
-button{padding:12px 18px;border:0;border-radius:9px;margin:8px 8px 20px 0;cursor:pointer}
-#capture{background:#17202a;color:white}.clear{background:#e8edf1}
-.status{padding:12px;background:#f5f6f8;border-radius:9px}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:20px}
-.metric{border:1px solid #ddd;border-radius:10px;padding:18px}.metric b{display:block;font-size:28px;margin-top:6px}
-pre{background:#101828;color:white;padding:15px;border-radius:10px;max-height:300px;overflow:auto}
+body{
+  font-family:Arial,sans-serif;
+  background:#f3f5f7;
+  margin:0;
+  padding:40px;
+  color:#17202a
+}
+.card{
+  max-width:800px;
+  margin:auto;
+  background:white;
+  padding:28px;
+  border-radius:16px
+}
+button{
+  padding:12px 18px;
+  border:0;
+  border-radius:9px;
+  margin:8px 8px 20px 0;
+  cursor:pointer;
+  font-weight:600
+}
+#capture{
+  background:#17202a;
+  color:white
+}
+.clear{
+  background:#e8edf1
+}
+.status{
+  padding:12px;
+  background:#f5f6f8;
+  border-radius:9px
+}
+.grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:12px;
+  margin-top:20px
+}
+.metric{
+  border:1px solid #ddd;
+  border-radius:10px;
+  padding:18px
+}
+.metric b{
+  display:block;
+  font-size:28px;
+  margin-top:6px
+}
+pre{
+  background:#101828;
+  color:white;
+  padding:15px;
+  border-radius:10px;
+  max-height:300px;
+  overflow:auto
+}
 </style>
 </head>
+
 <body>
+
 <div class="card">
+
 <h1>Mannheim Bulky ITMS Test</h1>
-<p>Isolated test page. This repository is separate from the live Mannheim Bulky project.</p>
-<button id="capture">Request Latest Bulky Capture</button>
-<button id="clear" class="clear">Clear</button>
-<div id="status" class="status">Waiting for capture.</div>
+
+<p>
+Isolated live test page. This repository is separate from the live Mannheim Bulky project.
+</p>
+
+<button id="capture">
+Request Latest Bulky Capture
+</button>
+
+<button id="clear" class="clear">
+Clear
+</button>
+
+<div id="status" class="status">
+Waiting for capture.
+</div>
+
 <div class="grid">
-<div class="metric">Records<b id="records">0</b></div>
-<div class="metric">Installations<b id="installations">0</b></div>
-<div class="metric">Recycles<b id="recycles">0</b></div>
+
+<div class="metric">
+Records
+<b id="records">0</b>
 </div>
+
+<div class="metric">
+Installations
+<b id="installations">0</b>
+</div>
+
+<div class="metric">
+Recycles
+<b id="recycles">0</b>
+</div>
+
+</div>
+
 <h3>Received data</h3>
+
 <pre id="output">No data received.</pre>
+
 </div>
+
 <script>
-const el=id=>document.getElementById(id);
+
+const el = id => document.getElementById(id);
+
 function count(rows){
-let i=0,r=0;
-for(const x of rows){
-const a=String(x["Installation Service"]??x.installationService??x.installation_service??x.installation??"").trim();
-const b=String(x["Recycling Service"]??x.recyclingService??x.recycling_service??x.recycling??"").trim();
-if(a==="Delivery and Installation Together")i++;
-if(b==="Requires Recycling")r++;
+
+  let installations = 0;
+  let recycles = 0;
+
+  for(const x of rows){
+
+    const installation = String(
+      x.installationServiceStatus ??
+      x["Installation Service"] ??
+      x.installationService ??
+      ""
+    ).trim();
+
+    const recycling = String(
+      x.recycleServiceStatus ??
+      x["Recycling Service"] ??
+      x.recyclingService ??
+      ""
+    ).trim();
+
+    if(/Delivery and Installation Together/i.test(installation)){
+      installations++;
+    }
+
+    if(/Requires Recycling/i.test(recycling)){
+      recycles++;
+    }
+  }
+
+  return [
+    rows.length,
+    installations,
+    recycles
+  ];
 }
-return [rows.length,i,r];
-}
-window.addEventListener("message",e=>{
-const d=e.data;
-if(!d||d.source!=="itms-bulky-test-extension"||d.type!=="BULKY_CAPTURE_DATA")return;
-const rows=Array.isArray(d.records)?d.records:Array.isArray(d.data)?d.data:Array.isArray(d.payload)?d.payload:[];
-const [n,i,r]=count(rows);
-el("records").textContent=n;el("installations").textContent=i;el("recycles").textContent=r;
-el("status").textContent="Capture received successfully.";
-el("output").textContent=JSON.stringify(rows,null,2);
+
+window.addEventListener("message", event => {
+
+  const data = event.data || {};
+
+  if(
+    data.source !== "itms-bulky-capture-extension" ||
+    data.type !== "ITMS_BULKY_CAPTURE_DATA"
+  ){
+    return;
+  }
+
+  const capture = data.capture;
+
+  const rows =
+    Array.isArray(capture?.records)
+      ? capture.records
+      : [];
+
+  const [
+    records,
+    installations,
+    recycles
+  ] = count(rows);
+
+  el("records").textContent = records;
+  el("installations").textContent = installations;
+  el("recycles").textContent = recycles;
+
+  el("status").textContent =
+    "Capture received successfully.";
+
+  el("output").textContent =
+    JSON.stringify(capture || null, null, 2);
+
 });
-el("capture").onclick=()=>{
-el("status").textContent="Requesting latest Bulky ITMS capture...";
-window.postMessage({source:"mannheim-bulky-itms-test",type:"GET_BULKY_CAPTURE"},"*");
+
+el("capture").onclick = () => {
+
+  el("status").textContent =
+    "Requesting latest Bulky ITMS capture...";
+
+  window.postMessage({
+    source:"mannheim-depot-planner",
+    type:"ITMS_REQUEST_BULKY_CAPTURE"
+  },"*");
+
 };
-el("clear").onclick=()=>{
-el("records").textContent=el("installations").textContent=el("recycles").textContent="0";
-el("status").textContent="Waiting for capture.";el("output").textContent="No data received.";
+
+el("clear").onclick = () => {
+
+  el("records").textContent = "0";
+  el("installations").textContent = "0";
+  el("recycles").textContent = "0";
+
+  el("status").textContent =
+    "Waiting for capture.";
+
+  el("output").textContent =
+    "No data received.";
+
 };
+
 </script>
+
 </body>
 </html>
