@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mannheim Operations Planner</title>
+<style>
+:root{--navy:#10233f;--blue:#2563eb;--line:#dbe2ea;--soft:#f4f6f8;--green:#15803d}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--soft);color:var(--navy);overflow:hidden}
+.master{height:100vh;display:flex;flex-direction:column}
+.masterbar{height:72px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 22px;gap:22px;flex:0 0 72px}
+.brand{min-width:290px}.kicker{font-size:10px;font-weight:800;letter-spacing:.18em;color:#64748b}.title{font-size:21px;font-weight:850;line-height:1.1}.sub{font-size:11px;color:#718096;margin-top:3px}
+.nav{display:flex;gap:8px}.nav button{border:1px solid var(--line);background:#fff;color:#334155;padding:10px 18px;border-radius:10px;font-weight:800;cursor:pointer}.nav button.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+.status{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:#64748b}.dot{width:9px;height:9px;border-radius:50%;background:#94a3b8}.dot.ok{background:#16a34a}.frame-wrap{position:relative;flex:1;min-height:0}.module-frame{position:absolute;inset:0;width:100%;height:100%;border:0;background:#f4f6f8;display:none}.module-frame.active{display:block}
+.loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#f4f6f8;color:#64748b;z-index:2}.loaded .loading{display:none}
+@media(max-width:900px){.brand{min-width:0}.sub{display:none}.status{display:none}.masterbar{gap:12px}.nav button{padding:9px 12px}}
+</style>
+</head>
+<body>
+<div class="master">
+<header class="masterbar">
+<div class="brand"><div class="kicker">MANNHEIM OPERATIONS</div><div class="title">Depot Planner</div><div class="sub">Small & Medium · Bulky · unified operations workspace</div></div>
+<nav class="nav" aria-label="Planner modules">
+<button id="smBtn" class="active">Small & Medium</button>
+<button id="bulkyBtn">Bulky</button>
+</nav>
+<div class="status"><span id="statusDot" class="dot"></span><span id="statusText">Ready</span></div>
+</header>
+<main class="frame-wrap" id="frameWrap">
+<div class="loading">Loading planner…</div>
+<iframe id="smFrame" class="module-frame active" title="Small and Medium Planner" src="small-medium.html"></iframe>
+<iframe id="bulkyFrame" class="module-frame" title="Bulky Planner" src="bulky.html"></iframe>
+</main>
+</div>
+<script>
+const ORIGIN=location.origin;
+const smFrame=document.getElementById('smFrame');
+const bulkyFrame=document.getElementById('bulkyFrame');
+const smBtn=document.getElementById('smBtn');
+const bulkyBtn=document.getElementById('bulkyBtn');
+const frameWrap=document.getElementById('frameWrap');
+let active='sm';
+let requestFrame=null;
+
+function setActive(which){
+  active=which; requestFrame=which==='sm'?smFrame:bulkyFrame;
+  smFrame.classList.toggle('active',which==='sm');
+  bulkyFrame.classList.toggle('active',which==='bulky');
+  smBtn.classList.toggle('active',which==='sm');
+  bulkyBtn.classList.toggle('active',which==='bulky');
+  document.getElementById('statusText').textContent=which==='sm'?'Small & Medium ready':'Bulky ready';
+  document.getElementById('statusDot').classList.add('ok');
+}
+smBtn.onclick=()=>setActive('sm');
+bulkyBtn.onclick=()=>setActive('bulky');
+smFrame.addEventListener('load',()=>{frameWrap.classList.add('loaded');});
+bulkyFrame.addEventListener('load',()=>{frameWrap.classList.add('loaded');});
+
+// ITMS bridge relay: the extension talks to the top-level page.
+// Child modules send their existing requests to this shell; responses are routed back.
+window.addEventListener('message',event=>{
+  const d=event.data||{};
+  if(event.source===window)return;
+
+  if(event.source===smFrame.contentWindow || event.source===bulkyFrame.contentWindow){
+    requestFrame=event.source===smFrame.contentWindow?smFrame:bulkyFrame;
+    if(d.source==='mannheim-depot-planner' && typeof d.type==='string' && d.type.startsWith('ITMS_REQUEST_')){
+      window.postMessage(d,ORIGIN);
+      document.getElementById('statusText').textContent='ITMS request sent…';
+      document.getElementById('statusDot').classList.add('ok');
+    }
+    return;
+  }
+
+  const isSM=d.source==='itms-parcel-capture-extension';
+  const isBulky=d.source==='itms-bulky-capture-extension';
+  if((isSM||isBulky) && requestFrame){
+    requestFrame.contentWindow.postMessage(d,ORIGIN);
+    document.getElementById('statusText').textContent=isBulky?'Bulky ITMS capture received':'ITMS capture received';
+    document.getElementById('statusDot').classList.add('ok');
+  }
+});
+
+// Also forward custom event based bridge used by older Small & Medium extension versions.
+window.addEventListener('mannheim-itms-capture-ready',e=>{
+  if(requestFrame)requestFrame.contentWindow.dispatchEvent(new CustomEvent('mannheim-itms-capture-ready',{detail:e.detail}));
+});
+window.addEventListener('mannheim-itms-capture-ready-json',e=>{
+  if(requestFrame)requestFrame.contentWindow.dispatchEvent(new CustomEvent('mannheim-itms-capture-ready-json',{detail:e.detail}));
+});
+</script>
+</body>
+</html>
